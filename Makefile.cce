@@ -1,0 +1,41 @@
+CCE_DIR=${COMPUTECPP_DIR}
+CCE=$(CCE_DIR)/bin/compute++
+
+CCE_OPTS=-sycl -O2 -mllvm -inline-threshold=1000 -intelspirmetadata -fno-addrsig -sycl-target ptx64 -std=c++14 -D_GLIBCXX_USE_CXX11_ABI=0
+CCE_INC=$(CCE_DIR)/include
+CCE_LIBS=$(CCE_DIR)/lib: $(CCE_DIR)/lib/libComputeCpp.so /usr/lib64/libOpenCL.so
+
+WG=$(shell which g++)
+CXX=$(WG)
+CXX_OPTS=-Wall -std=c++14 -D_GLIBCXX_USE_CXX11_ABI=0 -pthread -g
+
+
+
+default: fp
+
+
+info:
+# 	$(shell which g++)
+	@echo "g++       $(WG)"
+	@echo "CXXFLAGS  $(OPTS) $(CXXFLAGS)"
+	@echo "GPUARCH   $(GPUARCH)"
+	@echo "NVCCFLAGS $(NVCCFLAGS)"
+
+
+fp : FindPrimes.o FindPrimesSYCL.o Crunch.o
+	$(CXX) $(CXX_OPTS) Crunch.o FindPrimes.o FindPrimesSYCL.o -o fp -Wl,-rpath,$(CCE_LIBS) 
+
+Crunch.o : Crunch.cpp Crunch.h
+	$(CXX) $(CXX_OPTS) -o Crunch.o -c Crunch.cpp
+
+FindPrimes.o : main.cpp FindPrimes.bc work.h
+	$(CXX) -isystem $(CCE_INC) $(CXX_OPTS) -o FindPrimes.o -c main.cpp
+
+FindPrimesSYCL.o : FindPrimesSYCL.cpp FindPrimes.bc work.h
+	$(CXX) -isystem $(CCE_INC) $(CXX_OPTS) -include FindPrimes.sycl -x c++ -o FindPrimesSYCL.o -c FindPrimesSYCL.cpp
+
+FindPrimes.bc : FindPrimesSYCL.cpp work.h MSG.h
+	$(CCE) $(CCE_OPTS) -I$(CCE_INC) -I/usr/include -sycl-ih FindPrimes.sycl -o FindPrimes.bc -c FindPrimesSYCL.cpp
+
+clean :
+	rm -f fp FindPrimes.o FindPrimesSYCL.o Crunch.o FindPrimes.sycl FindPrimes.bc
